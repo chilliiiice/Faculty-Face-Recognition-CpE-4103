@@ -48,7 +48,8 @@ public class AdminActivity extends AppCompatActivity {
     private int photoCount = 0;
     private String currentFacultyName;
     private File currentFacultyDir;
-    private static final int NUM_PHOTOS_TO_CAPTURE = 100;
+    private static final int NUM_PHOTOS_TO_CAPTURE = 50;
+    private static final long CAPTURE_INTERVAL_MS = 1;
 
     private ImageCapture imageCapture;
     private ExecutorService cameraExecutor;
@@ -104,25 +105,51 @@ public class AdminActivity extends AppCompatActivity {
 
         builder.setPositiveButton("Next", (dialog, which) -> {
             String facultyName = input.getText().toString().trim();
-            if (!facultyName.isEmpty()) {
-                currentFacultyName = facultyName;
-
-                File picturesDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-                currentFacultyDir = new File(picturesDir, "FacultyPhotos/" + facultyName);
-                if (!currentFacultyDir.exists()) currentFacultyDir.mkdirs();
-
-                photoCount = 0;
-                textStatus.setText("Ready to capture photos for: " + facultyName);
-
-                startCameraForFaculty();
-
-            } else {
+            if (facultyName.isEmpty()) {
                 textStatus.setText("Faculty name cannot be empty.");
+                return;
+            }
+
+            // Path where faculty folders are stored
+            File picturesDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+            File facultyRootDir = new File(picturesDir, "FacultyPhotos");
+            if (!facultyRootDir.exists()) facultyRootDir.mkdirs();
+
+            // Check for duplicate folder
+            File existingFacultyDir = new File(facultyRootDir, facultyName);
+            if (existingFacultyDir.exists() && existingFacultyDir.isDirectory()) {
+                new AlertDialog.Builder(this)
+                        .setTitle("Duplicate Faculty")
+                        .setMessage("A dataset for \"" + facultyName + "\" already exists.\n\nDo you want to overwrite it?")
+                        .setPositiveButton("Overwrite", (d, w) -> {
+                            deleteRecursive(existingFacultyDir);
+                            startNewFacultyRegistration(facultyName);
+                        })
+                        .setNegativeButton("Cancel", (d, w) -> {
+                            textStatus.setText("Cancelled registration for: " + facultyName);
+                            d.dismiss();
+                        })
+                        .show();
+            } else {
+                startNewFacultyRegistration(facultyName);
             }
         });
 
         builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
         builder.show();
+    }
+
+    private void startNewFacultyRegistration(String facultyName) {
+        currentFacultyName = facultyName;
+
+        File picturesDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        currentFacultyDir = new File(picturesDir, "FacultyPhotos/" + facultyName);
+        if (!currentFacultyDir.exists()) currentFacultyDir.mkdirs();
+
+        photoCount = 0;
+        textStatus.setText("Ready to capture photos for: " + facultyName);
+
+        startCameraForFaculty();
     }
 
     private void showDeleteFacultyListDialog() {
@@ -193,16 +220,13 @@ public class AdminActivity extends AppCompatActivity {
             @Override
             public void onImageSaved(ImageCapture.OutputFileResults outputFileResults) {
                 photoCount++;
+                runOnUiThread(() -> textStatus.setText(
+                        "Captured photo " + photoCount + "/" + NUM_PHOTOS_TO_CAPTURE));
 
-                MediaScannerConnection.scanFile(
-                        AdminActivity.this,
-                        new String[]{photoFile.getAbsolutePath()},
-                        null,
-                        (path, uri) -> Log.d("MediaScanner", "Scanned " + path))
-                ;
-
-                runOnUiThread(() -> textStatus.setText("Captured photo " + photoCount + "/" + NUM_PHOTOS_TO_CAPTURE));
-                captureNextPhoto();
+                // Delay next capture by 0.5 seconds
+                new android.os.Handler(getMainLooper()).postDelayed(
+                        AdminActivity.this::captureNextPhoto, CAPTURE_INTERVAL_MS
+                );
             }
 
             @Override

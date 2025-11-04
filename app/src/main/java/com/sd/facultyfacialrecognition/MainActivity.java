@@ -63,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
     private ExecutorService cameraExecutor;
 
     private final Map<String, float[]> KNOWN_FACE_EMBEDDINGS = new HashMap<>();
-    private static final float THRESHOLD = 1.3f;
+    private float dynamicThreshold = 0.9f;
 
     private static final int STABILITY_FRAMES_NEEDED = 60;
     private static final long UNLOCK_COOLDOWN_MILLIS = 10000;
@@ -348,14 +348,20 @@ public class MainActivity extends AppCompatActivity {
 
                     for (Map.Entry<String, float[]> entry : KNOWN_FACE_EMBEDDINGS.entrySet()) {
                         float d = FaceNet.distance(emb, entry.getValue());
+                        Log.d("FaceRecognition", "Comparing with: " + entry.getKey() + " | Distance = " + d);
                         if (d < bestDist) {
                             bestDist = d;
                             currentBestFrameMatch = entry.getKey();
                         }
                     }
-                    if (bestDist > THRESHOLD) {
+
+                    Log.d("FaceRecognition", "Best match this frame: " + currentBestFrameMatch + " | Best Distance = " + bestDist);
+                    Log.d("FaceRecognition", "Using threshold = " + dynamicThreshold);
+
+                    if (bestDist > dynamicThreshold) {
                         currentBestFrameMatch = "Unknown";
                     }
+
                 }
             }
             graphics.add(new FaceOverlayView.FaceGraphic(face.getBoundingBox(), "", bestDist));
@@ -540,6 +546,11 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "Loaded " + KNOWN_FACE_EMBEDDINGS.size() + " embeddings from storage");
             Log.d(TAG, "Embeddings content: " + obj.toString(4));
 
+            dynamicThreshold = computeDynamicThreshold(KNOWN_FACE_EMBEDDINGS);
+            Log.d(TAG, "Auto-adjusted threshold: " + dynamicThreshold);
+
+            evaluateRecognitionAccuracy();
+
         } catch (Exception e) {
             Log.e(TAG, "Failed to load embeddings from storage", e);
         }
@@ -572,6 +583,97 @@ public class MainActivity extends AppCompatActivity {
 //            Log.e(TAG, "Failed to load embeddings from assets", e);
 //        }
 //    }
+
+
+    private float computeDynamicThreshold(Map<String, float[]> embeddingsMap) {
+        List<Float> intraDists = new ArrayList<>();
+        List<Float> interDists = new ArrayList<>();
+
+        List<String> names = new ArrayList<>(embeddingsMap.keySet());
+
+        for (String name : names) {
+            float[] emb = embeddingsMap.get(name);
+            if (emb != null) {
+                float intra = simulateNoiseDistance(emb);
+                intraDists.add(intra);
+            }
+        }
+
+        for (int i = 0; i < names.size(); i++) {
+            for (int j = i + 1; j < names.size(); j++) {
+                float[] embA = embeddingsMap.get(names.get(i));
+                float[] embB = embeddingsMap.get(names.get(j));
+                if (embA != null && embB != null) {
+                    float d = FaceNet.distance(embA, embB);
+                    interDists.add(d);
+                }
+            }
+        }
+
+        float meanIntra = average(intraDists);
+        float meanInter = average(interDists);
+        float threshold = (meanIntra + meanInter) / 2;
+
+        Log.d("DynamicThreshold", "Mean Intra = " + meanIntra +
+                " | Mean Inter = " + meanInter +
+                " | Computed Threshold = " + threshold);
+
+        // Safety check (if somehow it fails)
+        if (threshold < 0.3f || threshold > 1.3f) threshold = 0.9f;
+
+        return threshold;
+    }
+
+    private float simulateNoiseDistance(float[] emb) {
+        float[] noisy = emb.clone();
+        for (int i = 0; i < noisy.length; i++) {
+            noisy[i] += (Math.random() - 0.5f) * 0.02f; // small random noise
+        }
+        return FaceNet.distance(emb, noisy);
+    }
+
+    private float average(List<Float> list) {
+        if (list == null || list.isEmpty()) return 0f;
+        float sum = 0f;
+        for (float v : list) sum += v;
+        return sum / list.size();
+    }
+
+    private void evaluateRecognitionAccuracy() {
+        if (KNOWN_FACE_EMBEDDINGS.size() < 2) {
+            Log.d("ModelAccuracy", "Not enough embeddings to evaluate.");
+            return;
+        }
+
+        int totalComparisons = 0;
+        int correctMatches = 0;
+
+        List<String> names = new ArrayList<>(KNOWN_FACE_EMBEDDINGS.keySet());
+        for (int i = 0; i < names.size(); i++) {
+            String nameA = names.get(i);
+            float[] embA = KNOWN_FACE_EMBEDDINGS.get(nameA);
+            if (embA == null) continue;
+
+            for (int j = 0; j < names.size(); j++) {
+                String nameB = names.get(j);
+                float[] embB = KNOWN_FACE_EMBEDDINGS.get(nameB);
+                if (embB == null) continue;
+
+                float distance = FaceNet.distance(embA, embB);
+                boolean samePerson = nameA.equals(nameB);
+                boolean recognized = distance < dynamicThreshold;
+
+                if ((recognized && samePerson) || (!recognized && !samePerson)) {
+                    correctMatches++;
+                }
+
+                totalComparisons++;
+            }
+        }
+
+        float accuracy = (float) correctMatches / totalComparisons * 100f;
+        Log.d("ModelAccuracy", String.format("Recognition Accuracy: %.2f%% (Threshold = %.3f)", accuracy, dynamicThreshold));
+    }
 
     @Override
     protected void onDestroy() {
