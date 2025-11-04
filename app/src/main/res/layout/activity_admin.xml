@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/adminLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".AdminActivity"
+    android:padding="16dp"
+    android:background="#121212"> <!-- Dark background -->
+
+    <!-- Camera preview -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:layout_alignParentTop="true"
+        android:background="#000000" />
+
+    <!-- Add Faculty button -->
+    <Button
+        android:id="@+id/buttonAddFaculty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Add Faculty"
+        android:layout_below="@id/previewView"
+        android:layout_marginTop="16dp"
+        android:backgroundTint="#1E88E5"
+        android:textColor="#FFFFFF" />
+
+    <!-- Delete Faculty button -->
+    <Button
+        android:id="@+id/buttonDeleteFaculty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Delete Faculty"
+        android:layout_below="@id/buttonAddFaculty"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#E53935"
+        android:textColor="#FFFFFF" />
+
+    <!-- Generate Embeddings button -->
+    <Button
+        android:id="@+id/buttonGenerateEmbeddings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Generate Embeddings"
+        android:layout_below="@id/buttonDeleteFaculty"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#43A047"
+        android:textColor="#FFFFFF" />
+
+    <!-- Status TextView -->
+    <TextView
+        android:id="@+id/textStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Status messages will appear here"
+        android:layout_below="@id/buttonGenerateEmbeddings"
+        android:layout_marginTop="16dp"
+        android:textSize="16sp"
+        android:textColor="#FFFFFF" />
+</RelativeLayout>

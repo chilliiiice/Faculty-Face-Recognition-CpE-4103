@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
 import android.util.Size;
@@ -32,6 +33,8 @@ import com.google.mlkit.vision.face.FaceLandmark;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -112,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
 
         try {
             faceNet = new FaceNet(this, "facenet.tflite");
-            loadEmbeddingsFromAssets();
+            loadEmbeddingsFromStorage();
             Log.d(TAG, "FaceNet model and embeddings loaded successfully");
         } catch (Exception e) {
             Log.e(TAG, "Error initializing FaceNet or embeddings", e);
@@ -505,12 +508,20 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void loadEmbeddingsFromAssets() {
+    private void loadEmbeddingsFromStorage() {
         try {
-            InputStream is = getAssets().open("embeddings.json");
-            byte[] buffer = new byte[is.available()];
-            is.read(buffer);
-            is.close();
+            File embeddingsFile = new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES),
+                    "FacultyRecognition/embeddings.json");
+
+            if (!embeddingsFile.exists()) {
+                Log.e(TAG, "Embeddings file not found at " + embeddingsFile.getAbsolutePath());
+                return;
+            }
+
+            FileInputStream fis = new FileInputStream(embeddingsFile);
+            byte[] buffer = new byte[(int) embeddingsFile.length()];
+            fis.read(buffer);
+            fis.close();
 
             String json = new String(buffer, StandardCharsets.UTF_8);
             JSONObject obj = new JSONObject(json);
@@ -526,11 +537,14 @@ public class MainActivity extends AppCompatActivity {
                 KNOWN_FACE_EMBEDDINGS.put(name, emb);
             }
 
-            Log.d(TAG, "Loaded " + KNOWN_FACE_EMBEDDINGS.size() + " embeddings");
+            Log.d(TAG, "Loaded " + KNOWN_FACE_EMBEDDINGS.size() + " embeddings from storage");
+            Log.d(TAG, "Embeddings content: " + obj.toString(4)); // pretty print JSON
+
         } catch (Exception e) {
-            Log.e(TAG, "Failed to load embeddings.json", e);
+            Log.e(TAG, "Failed to load embeddings from storage", e);
         }
     }
+
 
     @Override
     protected void onDestroy() {

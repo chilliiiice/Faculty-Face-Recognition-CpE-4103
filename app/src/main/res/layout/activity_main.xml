@@ -84,6 +84,7 @@
             android:onClick="onLockDoorButtonClicked"
             android:visibility="gone" />
 
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
