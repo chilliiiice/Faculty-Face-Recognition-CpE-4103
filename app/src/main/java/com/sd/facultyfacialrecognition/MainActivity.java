@@ -269,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
 
         resetStateAfterAction();
         updateUiOnThread("Access Granted:\n" + authorizedUnlocker,
-                "Door UNLOCKED. Press 'Lock Door' to secure.");
+                "Door UNLOCKED. Choose options below.");
     }
 
     public void onTakeBreakClicked(View view) {
@@ -526,7 +526,7 @@ public class MainActivity extends AppCompatActivity {
             }
         } else {
             finalMessage = "Access Granted: " + authorizedUnlocker;
-            countdownMessage = "Door is UNLOCKED. Press 'Lock Door' to secure.";
+            countdownMessage = "Door UNLOCKED. Choose options below.";
         }
 
         updateUiOnThread(finalMessage, countdownMessage);

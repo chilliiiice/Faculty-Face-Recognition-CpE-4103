@@ -104,12 +104,17 @@ public class AdminActivity extends AppCompatActivity {
             finish(); // Close AdminActivity
         });
 
+        Button buttonGenerateEmbeddings = findViewById(R.id.buttonGenerateEmbeddings);
+        buttonGenerateEmbeddings.setOnClickListener(v -> {
+            generateEmbeddings();
+            Toast.makeText(this, "Generating embeddings...", Toast.LENGTH_SHORT).show();
+        });
+
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestIdToken(getString(R.string.default_web_client_id))
                 .requestEmail()
                 .build();
         mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
-
 
     }
 
@@ -364,5 +369,16 @@ public class AdminActivity extends AppCompatActivity {
         super.onDestroy();
         if (cameraExecutor != null) cameraExecutor.shutdown();
         if (faceNet != null) faceNet.close();
+
+        // Auto logout when the activity is destroyed
+        if (mAuth != null) mAuth.signOut();
+        if (mGoogleSignInClient != null) mGoogleSignInClient.signOut();
     }
+
+    @SuppressWarnings("MissingSuperCall")
+    @Override
+    public void onBackPressed() {
+        Toast.makeText(this, "Please use the Logout button to exit.", Toast.LENGTH_SHORT).show();
+    }
+
 }
