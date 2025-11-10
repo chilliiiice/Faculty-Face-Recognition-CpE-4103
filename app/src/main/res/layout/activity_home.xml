@@ -27,6 +27,6 @@
         android:id="@+id/buttonAdminPanel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Admin Panel" />
+        android:text="Database" />
 
 </LinearLayout>

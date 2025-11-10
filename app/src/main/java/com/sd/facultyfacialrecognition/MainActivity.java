@@ -8,13 +8,16 @@ import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
 import android.util.Size;
+import android.content.Intent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.OptIn;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ExperimentalGetImage;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -46,6 +49,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
+
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final int REQUEST_CAMERA_PERMISSION = 1001;
@@ -63,9 +70,9 @@ public class MainActivity extends AppCompatActivity {
     private ExecutorService cameraExecutor;
 
     private final Map<String, float[]> KNOWN_FACE_EMBEDDINGS = new HashMap<>();
-    private float dynamicThreshold = 0.9f;
+    private float dynamicThreshold = 1.2f;
 
-    private static final int STABILITY_FRAMES_NEEDED = 60;
+    private static final int STABILITY_FRAMES_NEEDED = 20;
     private static final long UNLOCK_COOLDOWN_MILLIS = 10000;
 
     private static final long CONFIRMATION_TIMEOUT_MILLIS = 10000;
@@ -115,11 +122,21 @@ public class MainActivity extends AppCompatActivity {
 
         try {
             faceNet = new FaceNet(this, "facenet.tflite");
-            loadEmbeddingsFromStorage();
+
+            boolean embeddingsLoaded = loadEmbeddingsFromStorage();
+            if (!embeddingsLoaded) {
+                Log.w(TAG, "Embeddings not found in storage — loading from assets instead...");
+                embeddingsLoaded = loadEmbeddingsFromAssets();
+                if (!embeddingsLoaded) {
+                    Log.e(TAG, "Failed to load embeddings from both storage and assets!");
+                }
+            }
+
             Log.d(TAG, "FaceNet model and embeddings loaded successfully");
         } catch (Exception e) {
             Log.e(TAG, "Error initializing FaceNet or embeddings", e);
         }
+
 
         if (allPermissionsGranted()) {
             startCamera();
@@ -193,44 +210,92 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void onLockDoorButtonClicked(View view) {
-
-        if (!isDoorLocked && !isAwaitingLockConfirmation && !isAwaitingLockerRecognition) {
-
-            isAwaitingLockerRecognition = true;
-
-            stableMatchCount = 0;
-            stableMatchName = "Scanning...";
-
-            updateUiOnThread("Awaiting Locker Recognition", "Please hold a faculty face steady for 5 seconds to initiate lock.");
-
-        } else {
-            Log.w(TAG, "Lock button pressed in incorrect state.");
-        }
-    }
-
     public void onConfirmYesClicked(View view) {
         stopConfirmationTimer();
         stopVisualCountdown();
 
         if (isAwaitingLockConfirmation) {
-            isDoorLocked = true;
-            isAwaitingLockConfirmation = false;
-            isAwaitingLockerRecognition = false;
-            lastLockTimestamp = System.currentTimeMillis();
-
-            resetStateAfterAction();
-            updateUiOnThread("System Locked", "Door secured. Cooldown active.");
+            handleLockConfirmation();
 
         } else if (isAwaitingUnlockConfirmation) {
-            isDoorLocked = false;
-            isAwaitingUnlockConfirmation = false;
-            authorizedUnlocker = stableMatchName;
-
-            resetStateAfterAction();
-            updateUiOnThread("Access Granted:\n" + authorizedUnlocker, "Door UNLOCKED. Press 'Lock Door' to secure.");
+            handleUnlockConfirmation();
         }
     }
+
+    private void handleLockConfirmation() {
+        isDoorLocked = true;
+        isAwaitingLockConfirmation = false;
+        isAwaitingLockerRecognition = false;
+        lastLockTimestamp = System.currentTimeMillis();
+
+        resetStateAfterAction();
+        updateUiOnThread("System Locked", "Door secured. Cooldown active.");
+    }
+
+    private void handleUnlockConfirmation() {
+        isDoorLocked = false;
+        isAwaitingUnlockConfirmation = false;
+        authorizedUnlocker = stableMatchName;
+
+        // Stop camera before starting new activity
+        if (cameraExecutor != null) {
+            cameraExecutor.shutdown();
+        }
+
+        // Check if rescan mode
+        boolean isRescanMode = getIntent().hasExtra("mode") &&
+                "rescan".equals(getIntent().getStringExtra("mode"));
+
+        if (isRescanMode) {
+            // Show break/end buttons, hide confirmation buttons
+            runOnUiThread(() -> {
+                findViewById(R.id.btn_take_break).setVisibility(View.VISIBLE);
+                findViewById(R.id.btn_end_class).setVisibility(View.VISIBLE);
+                findViewById(R.id.confirm_yes_button).setVisibility(View.GONE);
+                findViewById(R.id.confirm_no_button).setVisibility(View.GONE);
+                findViewById(R.id.lock_door_button).setVisibility(View.GONE);
+
+                updateUiOnThread("What would you like to do?", "Select an option below.");
+            });
+
+            resetStateAfterAction(); // Ensure state reset even in rescan mode
+            return;
+        }
+
+        // Normal unlock flow: go to dashboard
+        Intent intent = new Intent(MainActivity.this, DashboardActivity.class);
+        intent.putExtra("profName", authorizedUnlocker);
+        startActivity(intent);
+
+        resetStateAfterAction();
+        updateUiOnThread("Access Granted:\n" + authorizedUnlocker,
+                "Door UNLOCKED. Press 'Lock Door' to secure.");
+    }
+
+    public void onTakeBreakClicked(View view) {
+        // Go to dashboard with break status
+        Intent intent = new Intent(MainActivity.this, DashboardActivity.class);
+        intent.putExtra("profName", authorizedUnlocker);
+        intent.putExtra("status", "Professor is on break. Please scan to resume class.");
+        startActivity(intent);
+        finish();
+    }
+
+    public void onBackInClassScanned() {
+        stableMatchCount = 0;
+        authorizedUnlocker = null;
+        stableMatchName = "Scanning...";
+        currentBestMatch = "Scanning...";
+        updateUiOnThread("Professor Back in Class", "Please scan to confirm identity.");
+    }
+
+    public void onEndClassClicked(View view) {
+        Intent intent = new Intent(MainActivity.this, ThankYouActivity.class);
+        intent.putExtra("message", "Class ended and door is locked, thank you!");
+        startActivity(intent);
+        finish();
+    }
+
 
     public void onConfirmNoClicked(View view) {
         stopConfirmationTimer();
@@ -282,6 +347,7 @@ public class MainActivity extends AppCompatActivity {
         }, ContextCompat.getMainExecutor(this));
     }
 
+    @OptIn(markerClass = ExperimentalGetImage.class)
     private void bindPreviewAndAnalyzer(ProcessCameraProvider cameraProvider) {
         cameraProvider.unbindAll();
 
@@ -490,15 +556,9 @@ public class MainActivity extends AppCompatActivity {
             countdownTextView.setText(countdown);
 
             if (isAwaitingLockConfirmation || isAwaitingUnlockConfirmation) {
-                lockButton.setVisibility(View.GONE);
                 confirmYesButton.setVisibility(View.VISIBLE);
                 confirmNoButton.setVisibility(View.VISIBLE);
-            } else if (!isDoorLocked && !isAwaitingLockerRecognition) {
-                lockButton.setVisibility(View.VISIBLE);
-                confirmYesButton.setVisibility(View.GONE);
-                confirmNoButton.setVisibility(View.GONE);
             } else {
-                lockButton.setVisibility(View.GONE);
                 confirmYesButton.setVisibility(View.GONE);
                 confirmNoButton.setVisibility(View.GONE);
             }
@@ -514,75 +574,73 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void loadEmbeddingsFromStorage() {
+    private boolean loadEmbeddingsFromStorage() {
         try {
-            File embeddingsFile = new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                    "FacultyRecognition/embeddings.json");
+            File embeddingsFile = new File(
+                    getExternalFilesDir(Environment.DIRECTORY_PICTURES),
+                    "FacultyRecognition/embeddings.json"
+            );
 
             if (!embeddingsFile.exists()) {
-                Log.e(TAG, "Embeddings file not found at " + embeddingsFile.getAbsolutePath());
-                return;
+                Log.w(TAG, "Embeddings file not found.");
+                return false;
             }
 
             FileInputStream fis = new FileInputStream(embeddingsFile);
-            byte[] buffer = new byte[(int) embeddingsFile.length()];
-            fis.read(buffer);
+            String json = readStreamToString(fis);
             fis.close();
 
-            String json = new String(buffer, StandardCharsets.UTF_8);
-            JSONObject obj = new JSONObject(json);
+            Map<String, float[]> loaded = new Gson().fromJson(
+                    json,
+                    new TypeToken<Map<String, float[]>>() {}.getType()
+            );
 
-            Iterator<String> keys = obj.keys();
-            while (keys.hasNext()) {
-                String name = keys.next();
-                JSONArray arr = obj.getJSONArray(name);
-                float[] emb = new float[arr.length()];
-                for (int i = 0; i < arr.length(); i++) emb[i] = (float) arr.getDouble(i);
+            KNOWN_FACE_EMBEDDINGS.clear();
+            KNOWN_FACE_EMBEDDINGS.putAll(loaded);
 
-                normalizeEmbedding(emb);
-                KNOWN_FACE_EMBEDDINGS.put(name, emb);
-            }
-
-            Log.d(TAG, "Loaded " + KNOWN_FACE_EMBEDDINGS.size() + " embeddings from storage");
-            Log.d(TAG, "Embeddings content: " + obj.toString(4));
-
-            dynamicThreshold = computeDynamicThreshold(KNOWN_FACE_EMBEDDINGS);
-            Log.d(TAG, "Auto-adjusted threshold: " + dynamicThreshold);
-
-            evaluateRecognitionAccuracy();
+            Log.i(TAG, "Loaded " + KNOWN_FACE_EMBEDDINGS.size() + " embeddings.");
+            return true;
 
         } catch (Exception e) {
-            Log.e(TAG, "Failed to load embeddings from storage", e);
+            Log.e(TAG, "Error loading embeddings from storage", e);
+            return false;
         }
     }
 
-//    private void loadEmbeddingsFromAssets() {
-//        try {
-//            InputStream is = getAssets().open("embeddings.json");
-//            int size = is.available();
-//            byte[] buffer = new byte[size];
-//            is.read(buffer);
-//            is.close();
-//
-//            String json = new String(buffer, StandardCharsets.UTF_8);
-//            JSONObject obj = new JSONObject(json);
-//
-//            Iterator<String> keys = obj.keys();
-//            while (keys.hasNext()) {
-//                String name = keys.next();
-//                JSONArray arr = obj.getJSONArray(name);
-//                float[] emb = new float[arr.length()];
-//                for (int i = 0; i < arr.length(); i++) emb[i] = (float) arr.getDouble(i);
-//
-//                normalizeEmbedding(emb);
-//                KNOWN_FACE_EMBEDDINGS.put(name, emb);
-//            }
-//
-//            Log.d(TAG, "Loaded " + KNOWN_FACE_EMBEDDINGS.size() + " embeddings from assets");
-//        } catch (Exception e) {
-//            Log.e(TAG, "Failed to load embeddings from assets", e);
-//        }
-//    }
+    private boolean loadEmbeddingsFromAssets() {
+        try {
+            InputStream is = getAssets().open("embeddings.json");
+            String json = readStreamToString(is);
+            is.close();
+
+            Map<String, float[]> loaded = new Gson().fromJson(
+                    json,
+                    new TypeToken<Map<String, float[]>>() {}.getType()
+            );
+
+            KNOWN_FACE_EMBEDDINGS.clear();
+            KNOWN_FACE_EMBEDDINGS.putAll(loaded);
+
+            Log.i(TAG, "Loaded embeddings from assets: " + KNOWN_FACE_EMBEDDINGS.size());
+            return true;
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error loading embeddings from assets", e);
+            return false;
+        }
+    }
+
+    private String readStreamToString(InputStream is) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        byte[] buffer = new byte[1024];
+        int length;
+        while ((length = is.read(buffer)) != -1) {
+            sb.append(new String(buffer, 0, length, StandardCharsets.UTF_8));
+        }
+        return sb.toString();
+    }
+
+
 
 
     private float computeDynamicThreshold(Map<String, float[]> embeddingsMap) {

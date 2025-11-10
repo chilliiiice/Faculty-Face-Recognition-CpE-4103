@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Faculty Facial Recognition</string>
     <string name="default_status">Awaiting Recognition</string>
+    <string name="default_web_client_id">997059640039-lrkdam6ppmd723683ic9rf4lhhd0t6pa.apps.googleusercontent.com</string>
 </resources>

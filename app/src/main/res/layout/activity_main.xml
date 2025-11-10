@@ -84,6 +84,26 @@
             android:onClick="onLockDoorButtonClicked"
             android:visibility="gone" />
 
+        <Button
+            android:id="@+id/btn_take_break"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Take a Break"
+            android:visibility="gone"
+            android:onClick="onTakeBreakClicked"
+            android:padding="12dp" />
+
+        <Button
+            android:id="@+id/btn_end_class"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="End Class"
+            android:visibility="gone"
+            android:onClick="onEndClassClicked"
+            android:layout_marginTop="12dp"
+            android:padding="12dp" />
+
+
 
     </LinearLayout>
 

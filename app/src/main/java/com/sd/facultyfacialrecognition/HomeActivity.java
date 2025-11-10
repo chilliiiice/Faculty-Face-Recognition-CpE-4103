@@ -1,5 +1,6 @@
 package com.sd.facultyfacialrecognition;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Button;
@@ -25,7 +26,7 @@ public class HomeActivity extends AppCompatActivity {
         });
 
         buttonAdminPanel.setOnClickListener(v -> {
-            Intent intent = new Intent(HomeActivity.this, AdminActivity.class);
+            Intent intent = new Intent(HomeActivity.this, LoginActivity.class);
             startActivity(intent);
         });
     }

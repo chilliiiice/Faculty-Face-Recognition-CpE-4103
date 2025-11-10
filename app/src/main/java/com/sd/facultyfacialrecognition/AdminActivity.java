@@ -1,6 +1,7 @@
 package com.sd.facultyfacialrecognition;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Build;
@@ -11,6 +12,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.media.MediaScannerConnection;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -23,7 +25,11 @@ import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.firebase.auth.FirebaseAuth;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -56,6 +62,8 @@ public class AdminActivity extends AppCompatActivity {
 
     private FaceAligner faceAligner;
     private FaceNet faceNet;
+    private GoogleSignInClient mGoogleSignInClient;
+    private FirebaseAuth mAuth;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -81,6 +89,28 @@ public class AdminActivity extends AppCompatActivity {
 
         buttonAddFaculty.setOnClickListener(v -> showAddFacultyDialog());
         buttonDeleteFaculty.setOnClickListener(v -> showDeleteFacultyListDialog());
+
+        Button buttonLogout = findViewById(R.id.buttonLogout);
+        buttonLogout.setOnClickListener(v -> {
+            // Sign out from Firebase and Google
+            if (mAuth != null) mAuth.signOut();
+            if (mGoogleSignInClient != null) mGoogleSignInClient.signOut();
+
+            Toast.makeText(AdminActivity.this, "Logged out successfully", Toast.LENGTH_SHORT).show();
+
+            // Go back to LoginActivity
+            Intent intent = new Intent(AdminActivity.this, LoginActivity.class);
+            startActivity(intent);
+            finish(); // Close AdminActivity
+        });
+
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(getString(R.string.default_web_client_id))
+                .requestEmail()
+                .build();
+        mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+
+
     }
 
     private void requestStoragePermissions() {
