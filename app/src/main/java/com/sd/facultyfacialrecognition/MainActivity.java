@@ -61,9 +61,9 @@ public class MainActivity extends AppCompatActivity {
     private FaceOverlayView overlayView;
     private TextView statusTextView;
     private TextView countdownTextView;
-    private Button lockButton;
     private Button confirmYesButton;
     private Button confirmNoButton;
+    private Button btnBreakDone;
 
     private FaceNet faceNet;
     private ImageAligner imageAligner;
@@ -106,30 +106,31 @@ public class MainActivity extends AppCompatActivity {
         statusTextView = findViewById(R.id.text_status_label);
         countdownTextView = findViewById(R.id.text_countdown_status);
 
-        lockButton = findViewById(R.id.lock_door_button);
         confirmYesButton = findViewById(R.id.confirm_yes_button);
         confirmNoButton = findViewById(R.id.confirm_no_button);
+        btnBreakDone = findViewById(R.id.btn_break_done);
 
-        lockButton.setVisibility(View.GONE);
         confirmYesButton.setVisibility(View.GONE);
         confirmNoButton.setVisibility(View.GONE);
+        btnBreakDone.setVisibility(View.GONE);
 
         confirmationHandler = new Handler();
         countdownDisplayHandler = new Handler();
-
         cameraExecutor = Executors.newSingleThreadExecutor();
         imageAligner = new ImageAligner();
 
+
+        initializeSystem();
+        startCamera();
+    }
+
+    private void initializeSystem() {
         try {
             faceNet = new FaceNet(this, "facenet.tflite");
 
             boolean embeddingsLoaded = loadEmbeddingsFromStorage();
             if (!embeddingsLoaded) {
-                Log.w(TAG, "Embeddings not found in storage — loading from assets instead...");
                 embeddingsLoaded = loadEmbeddingsFromAssets();
-                if (!embeddingsLoaded) {
-                    Log.e(TAG, "Failed to load embeddings from both storage and assets!");
-                }
             }
 
             Log.d(TAG, "FaceNet model and embeddings loaded successfully");
@@ -137,17 +138,9 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Error initializing FaceNet or embeddings", e);
         }
 
-
-        if (allPermissionsGranted()) {
-            startCamera();
-        } else {
-            ActivityCompat.requestPermissions(
-                    this,
-                    new String[]{Manifest.permission.CAMERA},
-                    REQUEST_CAMERA_PERMISSION
-            );
-        }
+        startCamera();
     }
+
 
     private void startConfirmationTimer(boolean isLock) {
         stopConfirmationTimer();
@@ -237,23 +230,24 @@ public class MainActivity extends AppCompatActivity {
         isAwaitingUnlockConfirmation = false;
         authorizedUnlocker = stableMatchName;
 
-        // Stop camera before starting new activity
         if (cameraExecutor != null) {
             cameraExecutor.shutdown();
         }
 
-        // Check if rescan mode
         boolean isRescanMode = getIntent().hasExtra("mode") &&
                 "rescan".equals(getIntent().getStringExtra("mode"));
+        boolean isFromBreak = getIntent().getBooleanExtra("from_break", false);
 
         if (isRescanMode) {
-            // Show break/end buttons, hide confirmation buttons
             runOnUiThread(() -> {
-                findViewById(R.id.btn_take_break).setVisibility(View.VISIBLE);
-                findViewById(R.id.btn_end_class).setVisibility(View.VISIBLE);
+                if (isFromBreak) {
+                    findViewById(R.id.btn_break_done).setVisibility(View.VISIBLE);
+                } else {
+                    findViewById(R.id.btn_take_break).setVisibility(View.VISIBLE);
+                    findViewById(R.id.btn_end_class).setVisibility(View.VISIBLE);
+                }
                 findViewById(R.id.confirm_yes_button).setVisibility(View.GONE);
                 findViewById(R.id.confirm_no_button).setVisibility(View.GONE);
-                findViewById(R.id.lock_door_button).setVisibility(View.GONE);
 
                 updateUiOnThread("What would you like to do?", "Select an option below.");
             });
@@ -262,7 +256,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Normal unlock flow: go to dashboard
         Intent intent = new Intent(MainActivity.this, DashboardActivity.class);
         intent.putExtra("profName", authorizedUnlocker);
         startActivity(intent);
@@ -292,6 +285,13 @@ public class MainActivity extends AppCompatActivity {
     public void onEndClassClicked(View view) {
         Intent intent = new Intent(MainActivity.this, ThankYouActivity.class);
         intent.putExtra("message", "Class ended and door is locked, thank you!");
+        startActivity(intent);
+        finish();
+    }
+
+    public void onBreakDoneClicked(View view) {
+        Intent intent = new Intent(MainActivity.this, DashboardActivity.class);
+        intent.putExtra("profName", authorizedUnlocker);
         startActivity(intent);
         finish();
     }
@@ -746,12 +746,14 @@ public class MainActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startCamera();
+                initializeSystem();
             } else {
                 finish();
             }
         }
     }
+
 }

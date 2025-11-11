@@ -77,14 +77,6 @@
             android:visibility="gone" />
 
         <Button
-            android:id="@+id/lock_door_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Lock Door"
-            android:onClick="onLockDoorButtonClicked"
-            android:visibility="gone" />
-
-        <Button
             android:id="@+id/btn_take_break"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -102,6 +94,16 @@
             android:onClick="onEndClassClicked"
             android:layout_marginTop="12dp"
             android:padding="12dp" />
+
+        <Button
+            android:id="@+id/btn_break_done"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Break is Done"
+            android:onClick="onBreakDoneClicked"
+            android:visibility="gone"
+            android:padding="12dp" />
+
 
 
 

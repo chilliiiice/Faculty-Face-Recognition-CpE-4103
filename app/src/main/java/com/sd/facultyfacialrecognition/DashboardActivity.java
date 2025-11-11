@@ -34,6 +34,9 @@ public class DashboardActivity extends AppCompatActivity {
             Intent intent = new Intent(DashboardActivity.this, MainActivity.class);
             intent.putExtra("mode", "rescan");
             intent.putExtra("profName", profName);
+            if (statusText.getText().toString().contains("on break")) {
+                intent.putExtra("from_break", true);
+            }
             startActivity(intent);
             finish();
         });
