@@ -54,6 +54,7 @@ import java.util.concurrent.Executors;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.google.gson.reflect.TypeToken;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -109,7 +110,7 @@ public class MainActivity extends AppCompatActivity {
     private int confirmationTimeRemaining = VISUAL_COUNTDOWN_SECONDS;
     private FirebaseFirestore db;
 
-    private String currentLab = "CompLab3"; //CpeLab or CompLab3
+    private String currentLab = "CpeLab"; //CpeLab or CompLab3
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -234,7 +235,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String getCurrentTimestamp() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd | EEEE | HH:mm:ss", Locale.getDefault());
         return sdf.format(new Date());
     }
 
@@ -246,11 +247,12 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        String timestamp = new SimpleDateFormat("yyyy-MM-dd | EEEE | HH:mm:ss", Locale.getDefault())
                 .format(new Date());
 
         Map<String, Object> data = new HashMap<>();
         data.put("facultyStatus", facultyStatus);
+        data.put("facultyName", authorizedUnlocker);
         data.put("doorStatus", doorStatus);
         data.put("timestamp", timestamp);
 
@@ -261,13 +263,12 @@ public class MainActivity extends AppCompatActivity {
 
             DatabaseReference dbRef = database
                     .getReference(currentLab)
-                    .child(authorizedUnlocker);
+                    .child("Latest");
 
             dbRef.setValue(data)
-                    .addOnSuccessListener(aVoid ->
-                            Log.d("DoorDebug", "Realtime DB successfully updated"))
-                    .addOnFailureListener(e ->
-                            Log.e("DoorDebug", "Realtime DB update FAILED", e));
+                    .addOnSuccessListener(aVoid -> Log.d("DoorDebug", "Realtime DB successfully updated"))
+                    .addOnFailureListener(e -> Log.e("DoorDebug", "Realtime DB update FAILED", e));
+
 
         } catch (Exception e) {
             Log.e("DoorDebug", "Database initialization error", e);
@@ -303,18 +304,20 @@ public class MainActivity extends AppCompatActivity {
         if (facultyName == null || facultyName.equals("Scanning...") || facultyName.equals("Unknown")) return;
 
         Map<String, Object> data = new HashMap<>();
+        data.put("facultyName", facultyName);   // store the name
         data.put("facultyStatus", facultyStatus);
         data.put("doorStatus", doorStatus);
         data.put("timestamp", timestamp);
 
         db.collection(currentLab)
-                .document(facultyName)
+                .document("Latest")   // Always overwrite the same document
                 .set(data)
                 .addOnSuccessListener(aVoid -> Log.d("DoorLockDebug",
-                        "Updated " + currentLab + " for " + facultyName + " | " + facultyStatus + " | " + doorStatus + " | " + timestamp))
+                        "Updated " + currentLab + " Latest: " + facultyName + " | " + facultyStatus + " | " + doorStatus + " | " + timestamp))
                 .addOnFailureListener(e -> Log.e("DoorLockDebug",
-                        "Error updating " + currentLab + " for " + facultyName, e));
+                        "Error updating " + currentLab + " Latest", e));
     }
+
 
     private void handleLockConfirmation() {
         isDoorLocked = true;
@@ -345,7 +348,7 @@ public class MainActivity extends AppCompatActivity {
 
         String facultyStatus = "In Class";
         String doorStatus = "UNLOCKED";
-        String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+        String timestamp = new SimpleDateFormat("yyyy-MM-dd | EEEE | HH:mm:ss", Locale.getDefault()).format(new Date());
 
         Log.d("DoorLockDebug", "Handling UNLOCK confirmation for faculty: " + facultyNameFinal);
 
@@ -423,7 +426,7 @@ public class MainActivity extends AppCompatActivity {
         String facultyNameFinal = authorizedUnlocker;
         String facultyStatus = "Break";
         String doorStatus = "UNLOCKED";
-        String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+        String timestamp = new SimpleDateFormat("yyyy-MM-dd | EEEE | HH:mm:ss", Locale.getDefault()).format(new Date());
 
         Log.d("DoorLockDebug", "Professor taking break: " + facultyNameFinal);
 
@@ -455,7 +458,7 @@ public class MainActivity extends AppCompatActivity {
         String facultyNameFinal = authorizedUnlocker;
         String facultyStatus = "End Class";
         String doorStatus = "LOCKED";
-        String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+        String timestamp = new SimpleDateFormat("yyyy-MM-dd | EEEE | HH:mm:ss", Locale.getDefault()).format(new Date());
 
         Log.d("DoorLockDebug", "Class ended by: " + facultyNameFinal);
 
