@@ -49,13 +49,24 @@
         android:backgroundTint="#43A047"
         android:textColor="#FFFFFF" />
 
+    <!-- Import Local Images button -->
+    <Button
+        android:id="@+id/buttonImportLocalImages"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Import Local Images"
+        android:layout_below="@id/buttonImportDrive"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#FFA726"
+        android:textColor="#000000" />
+
     <!-- Generate Embeddings button -->
     <Button
         android:id="@+id/buttonGenerateEmbeddings"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Update Dataset"
-        android:layout_below="@id/buttonImportDrive"
+        android:layout_below="@id/buttonImportLocalImages"
         android:layout_marginTop="8dp"
         android:backgroundTint="#FBC02D"
         android:textColor="#000000" />

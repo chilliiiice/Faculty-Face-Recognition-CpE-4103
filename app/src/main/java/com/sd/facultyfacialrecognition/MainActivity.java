@@ -638,7 +638,11 @@ public class MainActivity extends AppCompatActivity {
 
                 }
             }
-            graphics.add(new FaceOverlayView.FaceGraphic(face.getBoundingBox(), "", bestDist));
+            String label = currentBestFrameMatch;
+            if (!currentBestFrameMatch.equals("Scanning...") && !currentBestFrameMatch.equals("Unknown")) {
+                label = String.format(Locale.US, "%s (%.2f)", currentBestFrameMatch, bestDist);
+            }
+            graphics.add(new FaceOverlayView.FaceGraphic(face.getBoundingBox(), label, bestDist));
         }
 
         this.currentBestMatch = currentBestFrameMatch;

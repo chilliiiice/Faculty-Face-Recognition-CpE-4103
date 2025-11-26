@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import androidx.exifinterface.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -40,6 +42,7 @@ import com.sd.facultyfacialrecognition.FaceNet;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -51,10 +54,11 @@ public class AdminActivity extends AppCompatActivity {
 
     private static final int REQUEST_CODE_SIGN_IN = 2001;
     private static final int REQUEST_CODE_PICK_IMAGES = 3001;
-    private static final int NUM_PHOTOS_TO_CAPTURE = 10;
+    private static final int REQUEST_CODE_PICK_LOCAL_IMAGES = 4001;
+    private static final int NUM_PHOTOS_TO_CAPTURE = 20;
     private static final long CAPTURE_INTERVAL_MS = 1;
 
-    private Button buttonAddFaculty, buttonDeleteFaculty, buttonImportDrive, buttonGenerateEmbeddings;
+    private Button buttonAddFaculty, buttonDeleteFaculty, buttonImportDrive, buttonGenerateEmbeddings, buttonImportLocalImages;
     private TextView textStatus;
     private PreviewView previewView;
 
@@ -79,6 +83,7 @@ public class AdminActivity extends AppCompatActivity {
         buttonDeleteFaculty = findViewById(R.id.buttonDeleteFaculty);
         buttonImportDrive = findViewById(R.id.buttonImportDrive);
         buttonGenerateEmbeddings = findViewById(R.id.buttonGenerateEmbeddings);
+        buttonImportLocalImages = findViewById(R.id.buttonImportLocalImages);
         textStatus = findViewById(R.id.textStatus);
         previewView = findViewById(R.id.previewView);
 
@@ -98,6 +103,7 @@ public class AdminActivity extends AppCompatActivity {
         buttonDeleteFaculty.setOnClickListener(v -> showDeleteFacultyListDialog());
         buttonImportDrive.setOnClickListener(v -> promptFacultyNameForDriveImport());
         buttonGenerateEmbeddings.setOnClickListener(v -> generateEmbeddings());
+        buttonImportLocalImages.setOnClickListener(v -> promptFacultyNameForLocalImport());
     }
 
     // -------------------- Storage Permissions --------------------
@@ -359,6 +365,36 @@ public class AdminActivity extends AppCompatActivity {
         builder.show();
     }
 
+    // -------------------- Local Image Import --------------------
+    private void promptFacultyNameForLocalImport() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Import Local Faculty Photos");
+
+        final EditText input = new EditText(this);
+        input.setHint("Enter Faculty Name");
+        builder.setView(input);
+
+        builder.setPositiveButton("Next", (dialog, which) -> {
+            currentFacultyName = input.getText().toString().trim();
+            if (currentFacultyName.isEmpty()) {
+                Toast.makeText(this, "Faculty name cannot be empty.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            openImagePicker();
+        });
+
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss());
+        builder.show();
+    }
+
+    private void openImagePicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        startActivityForResult(intent, REQUEST_CODE_PICK_LOCAL_IMAGES);
+    }
+
     private void openDrivePicker() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -392,8 +428,154 @@ public class AdminActivity extends AppCompatActivity {
             }
         } else if (requestCode == REQUEST_CODE_PICK_IMAGES && resultCode == RESULT_OK) {
             handleDriveImages(data);
+        } else if (requestCode == REQUEST_CODE_PICK_LOCAL_IMAGES && resultCode == RESULT_OK) {
+            handleLocalImages(data);
         }
     }
+
+    private void handleLocalImages(Intent data) {
+        if (data == null) return;
+
+        File facultyDir = new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "FacultyPhotos/" + currentFacultyName);
+        if (!facultyDir.exists()) facultyDir.mkdirs();
+
+        // Use a background thread for image processing
+        new Thread(() -> {
+            int imported = 0;
+            int failed = 0;
+
+            if (data.getClipData() != null) {
+                for (int i = 0; i < data.getClipData().getItemCount(); i++) {
+                    Uri uri = data.getClipData().getItemAt(i).getUri();
+                    if (cropAndSaveImage(uri, facultyDir, i)) {
+                        imported++;
+                    } else {
+                        failed++;
+                    }
+                }
+            } else if (data.getData() != null) {
+                if (cropAndSaveImage(data.getData(), facultyDir, 0)) {
+                    imported = 1;
+                } else {
+                    failed = 1;
+                }
+            }
+
+            int finalImported = imported;
+            int finalFailed = failed;
+            runOnUiThread(() -> {
+                String statusMessage = "Import successful! " + finalImported + " faces were cropped and saved.";
+                if (finalFailed > 0) {
+                    statusMessage += "\n" + finalFailed + " images were skipped because no face was detected.";
+                }
+                textStatus.setText(statusMessage);
+                Toast.makeText(this, "Local import processing finished.", Toast.LENGTH_SHORT).show();
+            });
+
+        }).start();
+    }
+
+    private boolean cropAndSaveImage(Uri uri, File facultyDir, int count) {
+        try {
+            Bitmap processedBitmap = loadCorrectlyOrientedImage(uri);
+
+            if (processedBitmap != null) {
+                Bitmap faceBitmap = faceAligner.alignFace(processedBitmap);
+                if (faceBitmap != null) {
+                    File outFile = new File(facultyDir, "photo_" + System.currentTimeMillis() + ".jpg");
+                    try (FileOutputStream out = new FileOutputStream(outFile)) {
+                        faceBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private Bitmap loadCorrectlyOrientedImage(Uri photoUri) throws IOException {
+        InputStream inputStream = getContentResolver().openInputStream(photoUri);
+        ExifInterface exifInterface = new ExifInterface(inputStream);
+        int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+
+        inputStream.close();
+        inputStream = getContentResolver().openInputStream(photoUri);
+
+        final BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        BitmapFactory.decodeStream(inputStream, null, options);
+        inputStream.close();
+
+        options.inSampleSize = calculateInSampleSize(options, 1024, 1024);
+
+        options.inJustDecodeBounds = false;
+        inputStream = getContentResolver().openInputStream(photoUri);
+        Bitmap bitmap = BitmapFactory.decodeStream(inputStream, null, options);
+        inputStream.close();
+
+        return rotateImage(bitmap, orientation);
+    }
+
+    private int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+        final int height = options.outHeight;
+        final int width = options.outWidth;
+        int inSampleSize = 1;
+
+        if (height > reqHeight || width > reqWidth) {
+            final int halfHeight = height / 2;
+            final int halfWidth = width / 2;
+            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2;
+            }
+        }
+        return inSampleSize;
+    }
+
+    private Bitmap rotateImage(Bitmap img, int orientation) {
+        if (img == null) return null;
+        Matrix matrix = new Matrix();
+        switch (orientation) {
+            case ExifInterface.ORIENTATION_ROTATE_90:
+                matrix.postRotate(90);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_180:
+                matrix.postRotate(180);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_270:
+                matrix.postRotate(270);
+                break;
+            case ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
+                matrix.preScale(-1.0f, 1.0f);
+                break;
+            case ExifInterface.ORIENTATION_TRANSPOSE:
+                matrix.setRotate(90);
+                matrix.postScale(-1.0f, 1.0f);
+                break;
+            case ExifInterface.ORIENTATION_TRANSVERSE:
+                matrix.setRotate(-90);
+                matrix.postScale(-1.0f, 1.0f);
+                break;
+            case ExifInterface.ORIENTATION_FLIP_VERTICAL:
+                matrix.preScale(1.0f, -1.0f);
+                break;
+            default:
+                return img;
+        }
+
+        try {
+            Bitmap bmRotated = Bitmap.createBitmap(img, 0, 0, img.getWidth(), img.getHeight(), matrix, true);
+            if (img != bmRotated) {
+                img.recycle();
+            }
+            return bmRotated;
+        } catch (OutOfMemoryError e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
 
     private void handleDriveImages(Intent data) {
         if (data == null) return;
@@ -465,6 +647,7 @@ public class AdminActivity extends AppCompatActivity {
                         Bitmap bitmap = BitmapFactory.decodeFile(photo.getAbsolutePath());
                         if (bitmap == null) continue;
 
+                        // The face should already be aligned from the import step, but we can re-align just in case.
                         Bitmap faceBitmap = faceAligner.alignFace(bitmap);
                         if (faceBitmap == null) continue;
 
