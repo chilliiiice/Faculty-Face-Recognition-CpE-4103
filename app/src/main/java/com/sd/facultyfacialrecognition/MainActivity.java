@@ -84,7 +84,7 @@ public class MainActivity extends AppCompatActivity {
     private final Map<String, float[]> KNOWN_FACE_EMBEDDINGS = new HashMap<>();
     private Map<String, List<float[]>> facultyEmbeddings = new HashMap<>();
 
-    private float dynamicThreshold = 0.57f;
+    private float dynamicThreshold = 0.59f;
 
     private static final int STABILITY_FRAMES_NEEDED = 20;
     private static final long UNLOCK_COOLDOWN_MILLIS = 10000;
