@@ -12,8 +12,10 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,8 +38,6 @@ import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.Task;
 import com.google.api.services.drive.DriveScopes;
 import com.google.gson.Gson;
-import com.sd.facultyfacialrecognition.FaceAligner;
-import com.sd.facultyfacialrecognition.FaceNet;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -61,6 +61,7 @@ public class AdminActivity extends AppCompatActivity {
     private Button buttonAddFaculty, buttonDeleteFaculty, buttonImportDrive, buttonGenerateEmbeddings, buttonImportLocalImages;
     private TextView textStatus;
     private PreviewView previewView;
+    private ProgressBar progressBar;
 
     private String currentFacultyName;
     private File currentFacultyDir;
@@ -86,6 +87,7 @@ public class AdminActivity extends AppCompatActivity {
         buttonImportLocalImages = findViewById(R.id.buttonImportLocalImages);
         textStatus = findViewById(R.id.textStatus);
         previewView = findViewById(R.id.previewView);
+        progressBar = findViewById(R.id.progressBar);
 
         cameraExecutor = Executors.newSingleThreadExecutor();
         faceAligner = new FaceAligner(this);
@@ -441,17 +443,24 @@ public class AdminActivity extends AppCompatActivity {
 
         // Use a background thread for image processing
         new Thread(() -> {
+            runOnUiThread(() -> {
+                progressBar.setVisibility(View.VISIBLE);
+                progressBar.setProgress(0);
+            });
             int imported = 0;
             int failed = 0;
 
             if (data.getClipData() != null) {
-                for (int i = 0; i < data.getClipData().getItemCount(); i++) {
+                int totalImages = data.getClipData().getItemCount();
+                for (int i = 0; i < totalImages; i++) {
                     Uri uri = data.getClipData().getItemAt(i).getUri();
                     if (cropAndSaveImage(uri, facultyDir, i)) {
                         imported++;
                     } else {
                         failed++;
                     }
+                    int finalI = i;
+                    runOnUiThread(() -> progressBar.setProgress((int) (((finalI + 1) / (float) totalImages) * 100)));
                 }
             } else if (data.getData() != null) {
                 if (cropAndSaveImage(data.getData(), facultyDir, 0)) {
@@ -459,6 +468,7 @@ public class AdminActivity extends AppCompatActivity {
                 } else {
                     failed = 1;
                 }
+                runOnUiThread(() -> progressBar.setProgress(100));
             }
 
             int finalImported = imported;
@@ -470,6 +480,7 @@ public class AdminActivity extends AppCompatActivity {
                 }
                 textStatus.setText(statusMessage);
                 Toast.makeText(this, "Local import processing finished.", Toast.LENGTH_SHORT).show();
+                progressBar.setVisibility(View.GONE);
             });
 
         }).start();
@@ -627,16 +638,28 @@ public class AdminActivity extends AppCompatActivity {
     private void generateEmbeddings() {
         textStatus.setText("Generating embeddings...");
         new Thread(() -> {
+            runOnUiThread(() -> {
+                progressBar.setVisibility(View.VISIBLE);
+                progressBar.setProgress(0);
+            });
             try {
                 File facultyRoot = new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "FacultyPhotos");
                 File[] facultyDirs = facultyRoot.listFiles(File::isDirectory);
                 if (facultyDirs == null || facultyDirs.length == 0) {
-                    runOnUiThread(() -> textStatus.setText("No faculty found to generate embeddings."));
+                    runOnUiThread(() -> {
+                        textStatus.setText("No faculty found to generate embeddings.");
+                        progressBar.setVisibility(View.GONE);
+                    });
                     return;
                 }
 
                 Map<String, List<float[]>> allEmbeddings = new HashMap<>();
+                int totalPhotos = 0;
+                for (File facultyDir : facultyDirs) {
+                    totalPhotos += facultyDir.listFiles((dir, name) -> name.endsWith(".jpg")).length;
+                }
 
+                int processedPhotos = 0;
                 for (File facultyDir : facultyDirs) {
                     String facultyName = facultyDir.getName();
                     File[] photos = facultyDir.listFiles((dir, name) -> name.endsWith(".jpg"));
@@ -653,6 +676,10 @@ public class AdminActivity extends AppCompatActivity {
 
                         float[] emb = faceNet.getEmbedding(faceBitmap);
                         if (emb != null) embeddingsList.add(emb);
+                        processedPhotos++;
+                        int finalProcessedPhotos = processedPhotos;
+                        int finalTotalPhotos = totalPhotos;
+                        runOnUiThread(() -> progressBar.setProgress((int) (((float) finalProcessedPhotos / finalTotalPhotos) * 100)));
                     }
                     allEmbeddings.put(facultyName, embeddingsList);
                 }
@@ -666,11 +693,15 @@ public class AdminActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     textStatus.setText("Embeddings generated for all faculty!");
                     Toast.makeText(AdminActivity.this, "Embeddings generation complete!", Toast.LENGTH_SHORT).show();
+                    progressBar.setVisibility(View.GONE);
                 });
 
             } catch (Exception e) {
                 e.printStackTrace();
-                runOnUiThread(() -> textStatus.setText("Error generating embeddings: " + e.getMessage()));
+                runOnUiThread(() -> {
+                    textStatus.setText("Error generating embeddings: " + e.getMessage());
+                    progressBar.setVisibility(View.GONE);
+                });
             }
         }).start();
     }
