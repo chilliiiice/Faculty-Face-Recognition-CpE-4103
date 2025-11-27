@@ -95,6 +95,7 @@ public class MainActivity extends AppCompatActivity {
     private String stableMatchName = "Scanning...";
     private String currentBestMatch = "Scanning...";
     private int stableMatchCount = 0;
+    private String lastMatchName = "";
 
     private boolean isDoorLocked = true;
     private boolean isAwaitingLockConfirmation = false;
@@ -748,6 +749,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private synchronized void updateStabilityState(String newMatch) {
+        if (!newMatch.equals(lastMatchName)) {
+            stableMatchCount = 0;
+            lastMatchName = newMatch;
+        }
         if (newMatch.equals(currentBestMatch)) {
             stableMatchCount++;
         } else {
