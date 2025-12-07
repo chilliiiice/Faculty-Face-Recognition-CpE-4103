@@ -574,6 +574,7 @@ public class MainActivity extends AppCompatActivity {
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
                 .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
                 .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+                .setMinFaceSize(0.30f)
                 .enableTracking()
                 .build();
 
@@ -626,7 +627,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             float headY = face.getHeadEulerAngleY();
-            float acceptableAngle = 25.0f;
+            float acceptableAngle = 70.0f;
 
             if (Math.abs(headY) > acceptableAngle) {
                 // The head is turned too much. Reject the frame.
