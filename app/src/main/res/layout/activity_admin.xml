@@ -38,26 +38,16 @@
         android:backgroundTint="#E53935"
         android:textColor="#FFFFFF" />
 
-    <!-- Import Drive button -->
-    <Button
-        android:id="@+id/buttonImportDrive"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Import Photos from Google Drive"
-        android:layout_below="@id/buttonDeleteFaculty"
-        android:layout_marginTop="8dp"
-        android:backgroundTint="#43A047"
-        android:textColor="#FFFFFF" />
 
     <!-- Import Local Images button -->
     <Button
         android:id="@+id/buttonImportLocalImages"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Import Local Images"
-        android:layout_below="@id/buttonImportDrive"
+        android:text="Import Local Images/Google Drive"
+        android:layout_below="@id/buttonDeleteFaculty"
         android:layout_marginTop="8dp"
-        android:backgroundTint="#FFA726"
+        android:backgroundTint="#3FFF26"
         android:textColor="#000000" />
 
     <!-- Generate Embeddings button -->

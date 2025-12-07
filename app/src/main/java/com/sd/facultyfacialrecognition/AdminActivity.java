@@ -58,7 +58,7 @@ public class AdminActivity extends AppCompatActivity {
     private static final int NUM_PHOTOS_TO_CAPTURE = 20;
     private static final long CAPTURE_INTERVAL_MS = 1;
 
-    private Button buttonAddFaculty, buttonDeleteFaculty, buttonImportDrive, buttonGenerateEmbeddings, buttonImportLocalImages;
+    private Button buttonAddFaculty, buttonDeleteFaculty, buttonGenerateEmbeddings, buttonImportLocalImages;
     private TextView textStatus;
     private PreviewView previewView;
     private ProgressBar progressBar;
@@ -82,7 +82,6 @@ public class AdminActivity extends AppCompatActivity {
 
         buttonAddFaculty = findViewById(R.id.buttonAddFaculty);
         buttonDeleteFaculty = findViewById(R.id.buttonDeleteFaculty);
-        buttonImportDrive = findViewById(R.id.buttonImportDrive);
         buttonGenerateEmbeddings = findViewById(R.id.buttonGenerateEmbeddings);
         buttonImportLocalImages = findViewById(R.id.buttonImportLocalImages);
         textStatus = findViewById(R.id.textStatus);
@@ -103,7 +102,6 @@ public class AdminActivity extends AppCompatActivity {
 
         buttonAddFaculty.setOnClickListener(v -> showAddFacultyDialog());
         buttonDeleteFaculty.setOnClickListener(v -> showDeleteFacultyListDialog());
-        buttonImportDrive.setOnClickListener(v -> promptFacultyNameForDriveImport());
         buttonGenerateEmbeddings.setOnClickListener(v -> generateEmbeddings());
         buttonImportLocalImages.setOnClickListener(v -> promptFacultyNameForLocalImport());
     }
@@ -343,28 +341,6 @@ public class AdminActivity extends AppCompatActivity {
             e.printStackTrace();
             return null;
         }
-    }
-
-    // -------------------- Google Drive --------------------
-    private void promptFacultyNameForDriveImport() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Import Faculty Photos from Drive");
-
-        final EditText input = new EditText(this);
-        input.setHint("Enter Faculty Name");
-        builder.setView(input);
-
-        builder.setPositiveButton("Next", (dialog, which) -> {
-            currentFacultyName = input.getText().toString().trim();
-            if (currentFacultyName.isEmpty()) {
-                Toast.makeText(this, "Faculty name cannot be empty.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            requestDriveSignIn();
-        });
-
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss());
-        builder.show();
     }
 
     // -------------------- Local Image Import --------------------

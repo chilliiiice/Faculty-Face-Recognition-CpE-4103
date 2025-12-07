@@ -84,9 +84,9 @@ public class MainActivity extends AppCompatActivity {
     private final Map<String, float[]> KNOWN_FACE_EMBEDDINGS = new HashMap<>();
     private Map<String, List<float[]>> facultyEmbeddings = new HashMap<>();
 
-    private float dynamicThreshold = 0.59f;
+    private float dynamicThreshold = 0.74f;
 
-    private static final int STABILITY_FRAMES_NEEDED = 20;
+    private static final int STABILITY_FRAMES_NEEDED = 10;
     private static final long UNLOCK_COOLDOWN_MILLIS = 10000;
 
     private static final long CONFIRMATION_TIMEOUT_MILLIS = 10000;
@@ -572,7 +572,8 @@ public class MainActivity extends AppCompatActivity {
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+                .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
                 .enableTracking()
                 .build();
 
@@ -611,6 +612,30 @@ public class MainActivity extends AppCompatActivity {
             currentBestFrameMatch = "Scanning...";
         } else {
             Face face = faces.get(0);
+            Float leftEyeOpenProb = face.getLeftEyeOpenProbability();
+            Float rightEyeOpenProb = face.getRightEyeOpenProbability();
+
+            // A threshold of 0.4 is a good starting point.
+            if ((leftEyeOpenProb != null && leftEyeOpenProb < 0.4) ||
+                    (rightEyeOpenProb != null && rightEyeOpenProb < 0.4)) {
+
+                // This frame is low quality. Reject it and update the UI.
+                updateUiOnThread("Face Unclear", "Please keep your eyes open.");
+                // Don't proceed to alignment or recognition for this bad frame.
+                runOnUiThread(() -> overlayView.setFaces(new ArrayList<>())); // Clear old boxes
+                return;
+            }
+            float headY = face.getHeadEulerAngleY();
+            float acceptableAngle = 25.0f;
+
+            if (Math.abs(headY) > acceptableAngle) {
+                // The head is turned too much. Reject the frame.
+                updateUiOnThread("Face Not Centered", "Please look towards the camera.");
+                runOnUiThread(() -> overlayView.setFaces(new ArrayList<>())); // Clear old boxes
+                return;
+            }
+
+
             android.graphics.PointF leftEye = face.getLandmark(FaceLandmark.LEFT_EYE) != null ? face.getLandmark(FaceLandmark.LEFT_EYE).getPosition() : null;
             android.graphics.PointF rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE) != null ? face.getLandmark(FaceLandmark.RIGHT_EYE).getPosition() : null;
 
