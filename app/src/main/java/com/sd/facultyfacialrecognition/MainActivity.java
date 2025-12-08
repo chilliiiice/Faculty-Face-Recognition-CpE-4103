@@ -1,9 +1,12 @@
 package com.sd.facultyfacialrecognition;
 
 import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -13,6 +16,7 @@ import android.content.Intent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.OptIn;
@@ -114,8 +118,11 @@ public class MainActivity extends AppCompatActivity {
     private Runnable countdownDisplayRunnable;
     private int confirmationTimeRemaining = VISUAL_COUNTDOWN_SECONDS;
     private FirebaseFirestore db;
+    private BluetoothAdapter bluetoothAdapter;
+    private BluetoothService bluetoothService;
+    private BluetoothDevice bluetoothDevice;
 
-    private String currentLab = "CpeLab"; //CpeLab or CompLab3
+    private String currentLab = "CpeLab";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -147,6 +154,43 @@ public class MainActivity extends AppCompatActivity {
 
         db = FirebaseFirestore.getInstance();
 
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
+        String deviceName = "CpELab Door Lock";
+        String deviceAddress = "14:33:5C:0F:3C:0A";
+
+        // Find paired device
+        bluetoothDevice = findPairedDevice(deviceName, deviceAddress);
+        if (bluetoothDevice == null) {
+            Log.e(TAG, "Bluetooth device not found!");
+            return;
+        }
+
+        bluetoothService = BluetoothServiceSingleton.getInstance(this, bluetoothDevice);
+
+
+    }
+
+    private BluetoothDevice findPairedDevice(String name, String address) {
+        if (bluetoothAdapter == null) return null;
+
+        // Check BLUETOOTH_CONNECT permission (required for Android 12+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+                    != PackageManager.PERMISSION_GRANTED) {
+                Log.e(TAG, "BLUETOOTH_CONNECT permission not granted!");
+                // Optionally, you can request permission here using ActivityCompat.requestPermissions
+                return null;
+            }
+        }
+
+        for (BluetoothDevice device : bluetoothAdapter.getBondedDevices()) {
+            if ((name != null && device.getName().equals(name)) ||
+                    (address != null && device.getAddress().equals(address))) {
+                return device;
+            }
+        }
+        return null;
     }
 
     private void initializeSystem() {
@@ -334,6 +378,11 @@ public class MainActivity extends AppCompatActivity {
         isAwaitingLockerRecognition = false;
         lastLockTimestamp = System.currentTimeMillis();
 
+        BluetoothService service = BluetoothServiceSingleton.getInstance();
+        if (service != null && service.isConnected()) {
+            service.sendDoorStatus("LOCKED");
+        }
+
         final String facultyNameFinal = authorizedLocker; // make final for lambda
         final String status = "LOCKED";
 
@@ -354,6 +403,11 @@ public class MainActivity extends AppCompatActivity {
         isAwaitingUnlockConfirmation = false;
         final String facultyNameFinal = stableMatchName;
         authorizedUnlocker = facultyNameFinal;
+
+        BluetoothService service = BluetoothServiceSingleton.getInstance();
+        if (service != null && service.isConnected()) {
+            service.sendDoorStatus("UNLOCKED");
+        }
 
         String facultyStatus = "In Class";
         String doorStatus = "UNLOCKED";
@@ -464,10 +518,18 @@ public class MainActivity extends AppCompatActivity {
     public void onEndClassClicked(View view) {
         if (authorizedUnlocker == null) return;
 
+        isAwaitingLockerRecognition = true;
+        stableMatchCount = 0;
+
         String facultyNameFinal = authorizedUnlocker;
         String facultyStatus = "End Class";
         String doorStatus = "LOCKED";
         String timestamp = new SimpleDateFormat("yyyy-MM-dd | EEEE | HH:mm:ss", Locale.getDefault()).format(new Date());
+
+        BluetoothService service = BluetoothServiceSingleton.getInstance();
+        if (service != null && service.isConnected()) {
+            service.sendDoorStatus("LOCKED");
+        }
 
         Log.d("DoorLockDebug", "Class ended by: " + facultyNameFinal);
 
@@ -1096,7 +1158,6 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Error testing embeddings load", e);
         }
     }
-
 
     @Override
     protected void onDestroy() {

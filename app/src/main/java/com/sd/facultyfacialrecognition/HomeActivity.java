@@ -58,8 +58,6 @@ public class HomeActivity extends AppCompatActivity {
                 Toast.makeText(this, "Camera permission is required to continue.", Toast.LENGTH_LONG).show();
                 finish();
             }
-            // ✅ NO NEED to reset buttons here — already set above
         }
     }
 }
-
