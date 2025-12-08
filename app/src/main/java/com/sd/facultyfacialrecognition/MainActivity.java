@@ -3,6 +3,7 @@ package com.sd.facultyfacialrecognition;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -84,9 +85,9 @@ public class MainActivity extends AppCompatActivity {
     private final Map<String, float[]> KNOWN_FACE_EMBEDDINGS = new HashMap<>();
     private Map<String, List<float[]>> facultyEmbeddings = new HashMap<>();
 
-    private float dynamicThreshold = 0.74f;
+    private float dynamicThreshold = 0.66f;
 
-    private static final int STABILITY_FRAMES_NEEDED = 10;
+    private static final int STABILITY_FRAMES_NEEDED = 7;
     private static final long UNLOCK_COOLDOWN_MILLIS = 10000;
 
     private static final long CONFIRMATION_TIMEOUT_MILLIS = 10000;
@@ -114,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
     private int confirmationTimeRemaining = VISUAL_COUNTDOWN_SECONDS;
     private FirebaseFirestore db;
 
-    private String currentLab = "CompLab3"; //CpeLab or CompLab3
+    private String currentLab = "CpeLab"; //CpeLab or CompLab3
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -602,81 +603,113 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void handleFaces(List<Face> faces, InputImage inputImage) {
-        List<FaceOverlayView.FaceGraphic> graphics = new ArrayList<>();
         Bitmap fullBmp = InputImageUtils.getBitmapFromInputImage(this, inputImage);
-        if (fullBmp == null) return;
-
-        String currentBestFrameMatch = "Scanning...";
-        float bestDist = Float.MAX_VALUE;
-
-        if (faces.isEmpty() || faces.size() > 1) {
-            currentBestFrameMatch = "Scanning...";
-        } else {
-            Face face = faces.get(0);
-            Float leftEyeOpenProb = face.getLeftEyeOpenProbability();
-            Float rightEyeOpenProb = face.getRightEyeOpenProbability();
-
-            // A threshold of 0.4 is a good starting point.
-            if ((leftEyeOpenProb != null && leftEyeOpenProb < 0.4) ||
-                    (rightEyeOpenProb != null && rightEyeOpenProb < 0.4)) {
-
-                // This frame is low quality. Reject it and update the UI.
-                updateUiOnThread("Face Unclear", "Please keep your eyes open.");
-                // Don't proceed to alignment or recognition for this bad frame.
-                runOnUiThread(() -> overlayView.setFaces(new ArrayList<>())); // Clear old boxes
-                return;
-            }
-            float headY = face.getHeadEulerAngleY();
-            float acceptableAngle = 70.0f;
-
-            if (Math.abs(headY) > acceptableAngle) {
-                // The head is turned too much. Reject the frame.
-                updateUiOnThread("Face Not Centered", "Please look towards the camera.");
-                runOnUiThread(() -> overlayView.setFaces(new ArrayList<>())); // Clear old boxes
-                return;
-            }
-
-
-            android.graphics.PointF leftEye = face.getLandmark(FaceLandmark.LEFT_EYE) != null ? face.getLandmark(FaceLandmark.LEFT_EYE).getPosition() : null;
-            android.graphics.PointF rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE) != null ? face.getLandmark(FaceLandmark.RIGHT_EYE).getPosition() : null;
-
-            Bitmap faceBmp = imageAligner.alignAndCropFace(fullBmp, face.getBoundingBox(), leftEye, rightEye);
-
-            if (faceBmp != null) {
-                float[] emb = faceNet.getEmbedding(faceBmp);
-                if (emb != null) {
-                    normalizeEmbedding(emb);
-
-                    for (Map.Entry<String, float[]> entry : KNOWN_FACE_EMBEDDINGS.entrySet()) {
-                        float d = FaceNet.distance(emb, entry.getValue());
-                        Log.d("FaceRecognition", "Comparing with: " + entry.getKey() + " | Distance = " + d);
-                        if (d < bestDist) {
-                            bestDist = d;
-                            currentBestFrameMatch = entry.getKey();
-                        }
-                    }
-
-                    Log.d("FaceRecognition", "Best match this frame: " + currentBestFrameMatch + " | Best Distance = " + bestDist);
-                    Log.d("FaceRecognition", "Using threshold = " + dynamicThreshold);
-
-                    if (bestDist > dynamicThreshold) {
-                        currentBestFrameMatch = "Unknown";
-                    }
-
-                }
-            }
-            String label = currentBestFrameMatch;
-            if (!currentBestFrameMatch.equals("Scanning...") && !currentBestFrameMatch.equals("Unknown")) {
-                label = String.format(Locale.US, "%s (%.2f)", currentBestFrameMatch, bestDist);
-            }
-            graphics.add(new FaceOverlayView.FaceGraphic(face.getBoundingBox(), label, bestDist));
+        if (fullBmp == null) {
+            // If the bitmap couldn't be created, stop.
+            updateUiOnThread("System Ready", "Point camera at face.");
+            return;
         }
 
+        Face bestFace = null;
+
+        if (faces.isEmpty()) {
+            // No faces detected, reset UI and stop.
+            currentBestMatch = "Scanning...";
+            updateUiOnThread("System Ready", "Point camera at face.");
+            runOnUiThread(() -> overlayView.setFaces(new ArrayList<>())); // Clear any old boxes
+            return;
+        } else if (faces.size() > 1) {
+            // --- THIS IS THE NEW LOGIC FOR MULTIPLE FACES ---
+            // Find the face closest to the center of the preview.
+            float minDistance = Float.MAX_VALUE;
+            int screenCenterX = previewView.getWidth() / 2;
+            int screenCenterY = previewView.getHeight() / 2;
+
+            for (Face face : faces) {
+                Rect boundingBox = face.getBoundingBox();
+                float distance = (float) Math.sqrt(
+                        Math.pow(boundingBox.centerX() - screenCenterX, 2) +
+                                Math.pow(boundingBox.centerY() - screenCenterY, 2)
+                );
+
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    bestFace = face;
+                }
+            }
+        } else {
+            // Only one face was detected, so it's the best one.
+            bestFace = faces.get(0);
+        }
+
+        if (bestFace == null) {
+            // If no best face was determined, stop.
+            return;
+        }
+
+        // --- FROM HERE ON, WE USE 'bestFace' FOR EVERYTHING ---
+
+        // 1. PERFORM QUALITY CHECKS ON THE BEST FACE
+        Float leftEyeOpenProb = bestFace.getLeftEyeOpenProbability();
+        Float rightEyeOpenProb = bestFace.getRightEyeOpenProbability();
+        if ((leftEyeOpenProb != null && leftEyeOpenProb < 0.4) || (rightEyeOpenProb != null && rightEyeOpenProb < 0.4)) {
+            updateUiOnThread("Face Unclear", "Please keep your eyes open.");
+            runOnUiThread(() -> overlayView.setFaces(new ArrayList<>()));
+            return;
+        }
+
+        float headY = bestFace.getHeadEulerAngleY();
+        float acceptableAngle = 70.0f;
+        if (Math.abs(headY) > acceptableAngle) {
+            updateUiOnThread("Face Not Centered", "Please look towards the camera.");
+            runOnUiThread(() -> overlayView.setFaces(new ArrayList<>()));
+            return;
+        }
+
+        // 2. ALIGN AND RECOGNIZE THE BEST FACE
+        String currentBestFrameMatch = "Scanning...";
+        float bestDist = Float.MAX_VALUE;
+        List<FaceOverlayView.FaceGraphic> graphics = new ArrayList<>();
+
+        android.graphics.PointF leftEye = bestFace.getLandmark(FaceLandmark.LEFT_EYE) != null ? bestFace.getLandmark(FaceLandmark.LEFT_EYE).getPosition() : null;
+        android.graphics.PointF rightEye = bestFace.getLandmark(FaceLandmark.RIGHT_EYE) != null ? bestFace.getLandmark(FaceLandmark.RIGHT_EYE).getPosition() : null;
+        Bitmap faceBmp = imageAligner.alignAndCropFace(fullBmp, bestFace.getBoundingBox(), leftEye, rightEye);
+
+        if (faceBmp != null) {
+            float[] emb = faceNet.getEmbedding(faceBmp);
+            if (emb != null) {
+                normalizeEmbedding(emb);
+
+                for (Map.Entry<String, float[]> entry : KNOWN_FACE_EMBEDDINGS.entrySet()) {
+                    float d = FaceNet.distance(emb, entry.getValue());
+                    if (d < bestDist) {
+                        bestDist = d;
+                        currentBestFrameMatch = entry.getKey();
+                    }
+                }
+
+                if (bestDist > dynamicThreshold) {
+                    currentBestFrameMatch = "Unknown";
+                }
+            }
+        }
+
+        // 3. CREATE THE GRAPHIC FOR ONLY THE BEST FACE
+        String label = currentBestFrameMatch;
+        if (!currentBestFrameMatch.equals("Scanning...") && !currentBestFrameMatch.equals("Unknown")) {
+            label = String.format(Locale.US, "%s (%.2f)", currentBestFrameMatch, bestDist);
+        }
+        graphics.add(new FaceOverlayView.FaceGraphic(bestFace.getBoundingBox(), label, bestDist));
+
+        // --- THE REST OF YOUR EXISTING LOGIC STAYS THE SAME ---
         this.currentBestMatch = currentBestFrameMatch;
 
         String finalMessage = "";
         String countdownMessage = "";
 
+        // (All your existing if/else logic for states like isAwaitingLockConfirmation, isDoorLocked, etc. goes here, unchanged)
+        // ...
+        // The caret position was here, so your existing logic starts from here
         if (isAwaitingLockConfirmation || isAwaitingUnlockConfirmation) {
 
             String authorizedName = isAwaitingLockConfirmation ? authorizedLocker : stableMatchName;
@@ -767,12 +800,14 @@ public class MainActivity extends AppCompatActivity {
             finalMessage = "Access Granted: " + authorizedUnlocker;
             countdownMessage = "Door UNLOCKED. Choose options below.";
         }
+        // ... until the end of the method
 
         updateUiOnThread(finalMessage, countdownMessage);
 
         overlayView.setImageSourceInfo(inputImage.getWidth(), inputImage.getHeight(), true);
         runOnUiThread(() -> overlayView.setFaces(graphics));
     }
+
 
     private synchronized void updateStabilityState(String newMatch) {
         if (!newMatch.equals(lastMatchName)) {
