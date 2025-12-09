@@ -376,23 +376,13 @@ public class MainActivity extends AppCompatActivity {
 
         boolean isRescanMode = getIntent().hasExtra("mode") &&
                 "rescan".equals(getIntent().getStringExtra("mode"));
-        boolean isFromBreak = getIntent().getBooleanExtra("from_break", false);
 
         if (isRescanMode) {
-            runOnUiThread(() -> {
-                if (isFromBreak) {
-                    findViewById(R.id.btn_break_done).setVisibility(View.VISIBLE);
-                } else {
-                    findViewById(R.id.btn_take_break).setVisibility(View.VISIBLE);
-                    findViewById(R.id.btn_end_class).setVisibility(View.VISIBLE);
-                }
-                findViewById(R.id.confirm_yes_button).setVisibility(View.GONE);
-                findViewById(R.id.confirm_no_button).setVisibility(View.GONE);
-
-                updateUiOnThread("What would you like to do?", "Select an option below.");
-            });
-
-            resetStateAfterAction();
+            Intent intent = new Intent(MainActivity.this, ActionActivity.class);
+            intent.putExtra("profName", facultyNameFinal);
+            intent.putExtra("currentLab", currentLab);
+            startActivity(intent);
+            finish(); // Finish MainActivity so the user can't go back to it
             return;
         }
 
@@ -799,6 +789,12 @@ public class MainActivity extends AppCompatActivity {
         } else {
             finalMessage = "Access Granted: " + authorizedUnlocker;
             countdownMessage = "Door UNLOCKED. Choose options below.";
+            updateUiOnThread(finalMessage, countdownMessage);
+            runOnUiThread(() -> {
+                previewView.setVisibility(View.GONE);
+                overlayView.setVisibility(View.GONE);
+            });
+            return;
         }
         // ... until the end of the method
 
