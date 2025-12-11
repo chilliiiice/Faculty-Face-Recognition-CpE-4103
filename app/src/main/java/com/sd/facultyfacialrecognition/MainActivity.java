@@ -608,6 +608,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startCamera() {
+        BluetoothService bt = BluetoothServiceSingleton.getInstance();
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
         cameraProviderFuture.addListener(() -> {
             try {
@@ -618,6 +619,17 @@ public class MainActivity extends AppCompatActivity {
             }
         }, ContextCompat.getMainExecutor(this));
     }
+
+    public void checkBluetoothBeforeCamera() {
+        BluetoothService bt = BluetoothServiceSingleton.getInstance();
+        if (bt == null || !bt.isConnected()) {
+            statusTextView.setText("Bluetooth not connected. Please connect to the Door Lock.");
+            Log.e("Camera", "Camera blocked: Bluetooth not connected.");
+            return;
+        }
+        startCamera(); // call your existing camera initialization
+    }
+
 
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void bindPreviewAndAnalyzer(ProcessCameraProvider cameraProvider) {
@@ -665,6 +677,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void handleFaces(List<Face> faces, InputImage inputImage) {
+
         Bitmap fullBmp = InputImageUtils.getBitmapFromInputImage(this, inputImage);
         if (fullBmp == null) {
             // If the bitmap couldn't be created, stop.
@@ -710,6 +723,17 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // --- FROM HERE ON, WE USE 'bestFace' FOR EVERYTHING ---
+
+        if (bluetoothService == null || !bluetoothService.isConnected()) {
+            // Stop the camera immediately
+            if (cameraExecutor != null) {
+                cameraExecutor.shutdownNow();
+                cameraExecutor = null;
+            }
+            runOnUiThread(() -> statusTextView.setText("Door Lock disconnected.\nFace Recognition stopped."));
+            Log.w(TAG, "Door Lock disconnected.\nStopping camera and face recognition.");
+            return; // Exit the method, no further processing
+        }
 
         // 1. PERFORM QUALITY CHECKS ON THE BEST FACE
         Float leftEyeOpenProb = bestFace.getLeftEyeOpenProbability();

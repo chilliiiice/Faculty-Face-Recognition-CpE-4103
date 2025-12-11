@@ -11,6 +11,11 @@ public class BluetoothServiceSingleton {
             instance = new BluetoothService(context, device);
             new Thread(() -> {
                 boolean connected = instance.connect();
+                if (connected && context instanceof MainActivity) {
+                    ((MainActivity) context).runOnUiThread(() -> {
+                        ((MainActivity) context).checkBluetoothBeforeCamera();
+                    });
+                }
                 if (!connected) Log.e("BluetoothServiceSingleton", "Failed to connect to Bluetooth device");
             }).start();
         }
