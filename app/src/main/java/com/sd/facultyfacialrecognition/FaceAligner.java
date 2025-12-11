@@ -26,9 +26,12 @@ public class FaceAligner {
     public FaceAligner(@NonNull Context context) {
         // High-speed face detection
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
-                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+                .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+                .setMinFaceSize(0.30f)
+                .enableTracking()
                 .build();
 
         detector = FaceDetection.getClient(options);
