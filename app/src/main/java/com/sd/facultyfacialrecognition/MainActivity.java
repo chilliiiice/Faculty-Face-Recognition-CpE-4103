@@ -157,7 +157,7 @@ public class MainActivity extends AppCompatActivity {
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
         String deviceName = "CpELab Door Lock";
-        String deviceAddress = "14:33:5C:0F:3C:0A";
+        String deviceAddress = "D4:E9:F4:E2:F8:02";
 
         // Find paired device
         bluetoothDevice = findPairedDevice(deviceName, deviceAddress);
@@ -1181,6 +1181,15 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             Log.e(TAG, "Error testing embeddings load", e);
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        Intent intent = new Intent(MainActivity.this, HomeActivity.class);
+        startActivity(intent);
+        finish(); // so MainActivity is removed from back stack
+
+        super.onBackPressed();
     }
 
     @Override

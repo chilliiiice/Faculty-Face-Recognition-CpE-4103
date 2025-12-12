@@ -80,8 +80,6 @@ public class BluetoothService {
         }).start();
     }
 
-
-
     // Disconnect safely
     public void disconnect() {
         try {

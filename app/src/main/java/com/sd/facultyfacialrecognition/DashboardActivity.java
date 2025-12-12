@@ -1,5 +1,6 @@
 package com.sd.facultyfacialrecognition;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Button;
@@ -41,6 +42,20 @@ public class DashboardActivity extends AppCompatActivity {
             finish();
         });
 
-
     }
+
+    @Override
+    public void onBackPressed() {
+        Intent intent = new Intent(DashboardActivity.this, DashboardActivity.class);
+
+        // Pass the current data so nothing resets
+        intent.putExtra("profName", profName);
+        intent.putExtra("status", statusText.getText().toString());
+
+        startActivity(intent);
+        finish();
+
+        super.onBackPressed(); // to satisfy Android Studio (won’t break anything)
+    }
+
 }
