@@ -156,7 +156,7 @@ public class MainActivity extends AppCompatActivity {
 
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
-        String deviceName = "CpELab Door Lock";
+        String deviceName = "CpE Laboratory Lock";
         String deviceAddress = "D4:E9:F4:E2:F8:02";
 
         // Find paired device
