@@ -1187,7 +1187,6 @@ public class MainActivity extends AppCompatActivity {
     public void onBackPressed() {
         Intent intent = new Intent(MainActivity.this, HomeActivity.class);
         startActivity(intent);
-        finish(); // so MainActivity is removed from back stack
 
         super.onBackPressed();
     }

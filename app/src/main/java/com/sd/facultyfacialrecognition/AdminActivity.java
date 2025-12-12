@@ -1,6 +1,7 @@
 package com.sd.facultyfacialrecognition;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -680,6 +681,15 @@ public class AdminActivity extends AppCompatActivity {
                 });
             }
         }).start();
+    }
+
+    @Override
+    public void onBackPressed() {
+        Intent intent = new Intent(AdminActivity.this, PinLockActivity.class);
+        startActivity(intent);
+        finish();
+
+        super.onBackPressed();
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.sd.facultyfacialrecognition;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
@@ -59,5 +60,14 @@ public class HomeActivity extends AppCompatActivity {
                 finish();
             }
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        Intent intent = new Intent(HomeActivity.this, HomeActivity.class);
+        startActivity(intent);
+        finish();
+
+        super.onBackPressed();
     }
 }
