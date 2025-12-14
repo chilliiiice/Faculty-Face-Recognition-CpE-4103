@@ -122,6 +122,18 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothService bluetoothService;
     private BluetoothDevice bluetoothDevice;
 
+
+    // --- Liveness state ---
+    private boolean eyesWereOpen = false;
+    private boolean blinkDetected = false;
+    private long lastLivenessTime = 0;
+    private static final long LIVENESS_TIMEOUT_MS = 1200;
+
+    private String livenessBoundName = null;
+    private float yawAtBlink = 0f;
+
+
+
     private String currentLab = "CpeLab";
 
     @Override
@@ -396,6 +408,10 @@ public class MainActivity extends AppCompatActivity {
 
         resetStateAfterAction();
         updateUiOnThread("System Locked", "Door secured. Cooldown active.");
+        blinkDetected = false;
+        eyesWereOpen = false;
+        livenessBoundName = null;
+
     }
 
     private void handleUnlockConfirmation() {
@@ -457,6 +473,10 @@ public class MainActivity extends AppCompatActivity {
         resetStateAfterAction();
         updateUiOnThread("Access Granted:\n" + facultyNameFinal,
                 "Door UNLOCKED. Choose options below.");
+        blinkDetected = false;
+        eyesWereOpen = false;
+        livenessBoundName = null;
+
     }
 
 
@@ -649,7 +669,7 @@ public class MainActivity extends AppCompatActivity {
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
                 .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
                 .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
-                .setMinFaceSize(0.30f)
+                .setMinFaceSize(0.80f)
                 .enableTracking()
                 .build();
 
@@ -679,6 +699,12 @@ public class MainActivity extends AppCompatActivity {
     private void handleFaces(List<Face> faces, InputImage inputImage) {
 
         Bitmap fullBmp = InputImageUtils.getBitmapFromInputImage(this, inputImage);
+        // 🔒 Freeze recognition & liveness during confirmation
+        if (isAwaitingUnlockConfirmation || isAwaitingLockConfirmation) {
+            runOnUiThread(() -> overlayView.setFaces(new ArrayList<>()));
+            return;
+        }
+
         if (fullBmp == null) {
             // If the bitmap couldn't be created, stop.
             updateUiOnThread("System Ready", "Point camera at face.");
@@ -736,16 +762,38 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // 1. PERFORM QUALITY CHECKS ON THE BEST FACE
-        Float leftEyeOpenProb = bestFace.getLeftEyeOpenProbability();
-        Float rightEyeOpenProb = bestFace.getRightEyeOpenProbability();
-        if ((leftEyeOpenProb != null && leftEyeOpenProb < 0.4) || (rightEyeOpenProb != null && rightEyeOpenProb < 0.4)) {
-            updateUiOnThread("Face Unclear", "Please keep your eyes open.");
+        Float left = bestFace.getLeftEyeOpenProbability();
+        Float right = bestFace.getRightEyeOpenProbability();
+        if (left == null || right == null) return;
+
+        boolean eyesOpenNow = left > 0.6f && right > 0.6f;
+        boolean eyesClosedNow = left < 0.2f && right < 0.2f;
+
+        // Detect blink
+        if (eyesWereOpen && eyesClosedNow) {
+            blinkDetected = true;
+            lastLivenessTime = System.currentTimeMillis();
+            yawAtBlink = bestFace.getHeadEulerAngleY();
+            livenessBoundName = currentBestMatch;
+        }
+        eyesWereOpen = eyesOpenNow;
+
+        // Enforce time-bound liveness
+        if (!blinkDetected ||
+                System.currentTimeMillis() - lastLivenessTime > LIVENESS_TIMEOUT_MS) {
+
+            blinkDetected = false;
+            updateUiOnThread("Liveness Check", "Please blink naturally.");
             runOnUiThread(() -> overlayView.setFaces(new ArrayList<>()));
             return;
         }
 
+
+
         float headY = bestFace.getHeadEulerAngleY();
         float acceptableAngle = 70.0f;
+
+
         if (Math.abs(headY) > acceptableAngle) {
             updateUiOnThread("Face Not Centered", "Please look towards the camera.");
             runOnUiThread(() -> overlayView.setFaces(new ArrayList<>()));
@@ -821,6 +869,17 @@ public class MainActivity extends AppCompatActivity {
                 if (isLockerIdentityConfirmed) {
                     isAwaitingLockerRecognition = false;
                     isAwaitingLockConfirmation = true;
+                    if (!blinkDetected ||
+                            !currentBestMatch.equals(livenessBoundName)) {
+
+                        updateUiOnThread(
+                                "Liveness Check",
+                                "Blink again while facing the camera."
+                        );
+                        stableMatchCount = 0;
+                        return;
+                    }
+
                     authorizedLocker = stableMatchName;
                     stableMatchCount = 0;
 
@@ -864,6 +923,17 @@ public class MainActivity extends AppCompatActivity {
 
                 if (isUnlockIdentityConfirmed) {
                     isAwaitingUnlockConfirmation = true;
+                    if (!blinkDetected ||
+                            !currentBestMatch.equals(livenessBoundName)) {
+
+                        updateUiOnThread(
+                                "Liveness Check",
+                                "Blink again while facing the camera."
+                        );
+                        stableMatchCount = 0;
+                        return;
+                    }
+
                     stableMatchCount = 0;
 
                     startConfirmationTimer(false);
