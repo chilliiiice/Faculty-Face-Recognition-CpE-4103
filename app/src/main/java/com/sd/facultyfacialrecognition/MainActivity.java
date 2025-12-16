@@ -89,9 +89,9 @@ public class MainActivity extends AppCompatActivity {
     private final Map<String, float[]> KNOWN_FACE_EMBEDDINGS = new HashMap<>();
     private Map<String, List<float[]>> facultyEmbeddings = new HashMap<>();
 
-    private float dynamicThreshold = 0.66f;
+    private float dynamicThreshold = 0.70f;
 
-    private static final int STABILITY_FRAMES_NEEDED = 7;
+    private static final int STABILITY_FRAMES_NEEDED = 5;
     private static final long UNLOCK_COOLDOWN_MILLIS = 10000;
 
     private static final long CONFIRMATION_TIMEOUT_MILLIS = 10000;
@@ -669,7 +669,6 @@ public class MainActivity extends AppCompatActivity {
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
                 .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
                 .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
-                .setMinFaceSize(0.80f)
                 .enableTracking()
                 .build();
 
